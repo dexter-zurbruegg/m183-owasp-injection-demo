@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>SecureBank — Injection Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; padding: 2rem; }
+    h1 { color: #fff; font-size: 1.4rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; font-size: 0.8rem; margin-bottom: 2rem; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+    .panel {
+      background: #1a1a1a; border-radius: 8px; padding: 1.25rem;
+      border: 1px solid #2a2a2a;
+    }
+    .panel h2 { font-size: 0.9rem; margin-bottom: 1rem; }
+    .vuln h2 { color: #FF6B6B; }
+    .safe h2  { color: #98D44C; }
+
+    label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px; }
+    input {
+      width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
+      color: #e0e0e0; padding: 8px 10px; font-family: monospace; font-size: 0.85rem;
+      margin-bottom: 10px;
+    }
+    input:focus { outline: none; border-color: #555; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 100px; cursor: pointer;
+      border: 1px solid #FF6B6B44; background: #FF6B6B11; color: #FF6B6B;
+      font-family: monospace;
+    }
+    .chip:hover { background: #FF6B6B22; }
+
+    button {
+      width: 100%; padding: 9px; border-radius: 4px; border: none;
+      font-family: monospace; font-size: 0.85rem; cursor: pointer; font-weight: bold;
+    }
+    .btn-vuln { background: #FF6B6B; color: #1a0000; }
+    .btn-vuln:hover { background: #e05555; }
+    .btn-safe  { background: #98D44C; color: #0a1a00; }
+    .btn-safe:hover  { background: #82bf3a; }
+
+    .sql-display {
+      background: #111; border-radius: 4px; padding: 10px 12px;
+      font-size: 0.75rem; color: #888; margin: 10px 0; min-height: 56px;
+      line-height: 1.6; word-break: break-all;
+    }
+    .kw { color: #7EC8E3; }
+    .val { color: #FF6B6B; }
+    .safe-val { color: #98D44C; }
+    .ph { color: #FFD700; }
+
+    .result {
+      border-radius: 4px; padding: 10px 12px; font-size: 0.78rem;
+      min-height: 48px; line-height: 1.6; border: 1px solid transparent;
+    }
+    .res-neutral { background: #222; border-color: #333; color: #888; }
+    .res-danger  { background: #2a0a0a; border-color: #FF6B6B; color: #FF6B6B; }
+    .res-success { background: #0a1a06; border-color: #98D44C; color: #98D44C; }
+    .res-blocked { background: #0a1220; border-color: #7EC8E3; color: #7EC8E3; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 8px; }
+    th { color: #555; padding: 4px 8px; border-bottom: 1px solid #2a2a2a; text-align: left; }
+    td { padding: 4px 8px; border-bottom: 1px solid #1e1e1e; }
+    tr.exposed td { background: #2a0a0a; color: #FF6B6B; }
+  </style>
+</head>
+<body>
+
+<h1>🏦 SecureBank AG — SQL Injection Demo</h1>
+<p class="subtitle">OWASP Top 10:2025 — A05 Injection | Lokal auf localhost:5000</p>
+
+<div class="grid">
+
+  <!-- VERWUNDBAR -->
+  <div class="panel vuln">
+    <h2>⚠ Verwundbar — String-Konkatenation</h2>
+
+    <label>Benutzername</label>
+    <input id="v-user" type="text" value="admin" oninput="previewVuln()" />
+    <label>Passwort</label>
+    <input id="v-pass" type="text" value="secret" oninput="previewVuln()" />
+
+    <div style="font-size:0.72rem;color:#888;margin-bottom:4px;">Payloads:</div>
+    <div class="chips">
+      <div class="chip" onclick="setVuln(`' OR '1'='1`,`x`)">Auth Bypass</div>
+      <div class="chip" onclick="setVuln(`admin'--`,`ignored`)">Comment Out</div>
+      <div class="chip" onclick="setVuln(`' OR 1=1--`,`x`)">OR 1=1</div>
+    </div>
+
+    <div class="sql-display" id="v-sql-preview"></div>
+    <button class="btn-vuln" onclick="doLogin('vulnerable')">Anmelden (unsicher)</button>
+    <div class="result res-neutral" id="v-result" style="margin-top:8px;">Bereit</div>
+
+    <table id="v-table">
+      <thead><tr><th>id</th><th>username</th><th>role</th><th>balance</th></tr></thead>
+      <tbody id="v-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- GESICHERT -->
+  <div class="panel safe">
+    <h2>✅ Gesichert — Prepared Statement</h2>
+
+    <label>Benutzername</label>
+    <input id="s-user" type="text" value="admin" oninput="previewSafe()" />
+    <label>Passwort</label>
+    <input id="s-pass" type="text" value="secret" oninput="previewSafe()" />
+
+    <div style="font-size:0.72rem;color:#888;margin-bottom:4px;">Selbe Payloads:</div>
+    <div class="chips" style="gap:6px">
+      <div class="chip" style="border-color:#98D44C44;background:#98D44C11;color:#98D44C"
+           onclick="setSafe(`' OR '1'='1`,`x`)">Auth Bypass</div>
+      <div class="chip" style="border-color:#98D44C44;background:#98D44C11;color:#98D44C"
+           onclick="setSafe(`admin'--`,`ignored`)">Comment Out</div>
+      <div class="chip" style="border-color:#98D44C44;background:#98D44C11;color:#98D44C"
+           onclick="setSafe(`' OR 1=1--`,`x`)">OR 1=1</div>
+    </div>
+
+    <div class="sql-display" id="s-sql-preview"></div>
+    <button class="btn-safe" onclick="doLogin('secure')">Anmelden (gesichert)</button>
+    <div class="result res-neutral" id="s-result" style="margin-top:8px;">Bereit</div>
+  </div>
+
+</div>
+
+<script>
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function previewVuln() {
+    const u = document.getElementById('v-user').value;
+    const p = document.getElementById('v-pass').value;
+    document.getElementById('v-sql-preview').innerHTML =
+      `<span class="kw">SELECT</span> * <span class="kw">FROM</span> users <span class="kw">WHERE</span> username = '<span class="val">${esc(u)}</span>' <span class="kw">AND</span> password = '<span class="val">${esc(p)}</span>'`;
+  }
+
+  function previewSafe() {
+    const u = document.getElementById('s-user').value;
+    const p = document.getElementById('s-pass').value;
+    document.getElementById('s-sql-preview').innerHTML =
+      `<span class="kw">SELECT</span> * <span class="kw">FROM</span> users <span class="kw">WHERE</span> username = <span class="ph">?</span> <span class="kw">AND</span> password = <span class="ph">?</span><br><span style="color:#555">-- params: [<span class="safe-val">'${esc(u)}'</span>, <span class="safe-val">'${esc(p)}'</span>]</span>`;
+  }
+
+  function setVuln(u, p) {
+    document.getElementById('v-user').value = u;
+    document.getElementById('v-pass').value = p;
+    previewVuln();
+  }
+  function setSafe(u, p) {
+    document.getElementById('s-user').value = u;
+    document.getElementById('s-pass').value = p;
+    previewSafe();
+  }
+
+  async function doLogin(mode) {
+    const prefix = mode === 'vulnerable' ? 'v' : 's';
+    const username = document.getElementById(prefix + '-user').value;
+    const password = document.getElementById(prefix + '-pass').value;
+
+    const res = await fetch('/login/' + mode, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+
+    const resultEl = document.getElementById(prefix + '-result');
+
+    if (mode === 'vulnerable') {
+      const tbody = document.getElementById('v-tbody');
+      tbody.innerHTML = '';
+      if (data.success) {
+        data.data.forEach(u => {
+          const tr = document.createElement('tr');
+          if (data.users_returned > 1) tr.className = 'exposed';
+          tr.innerHTML = `<td>${u.id}</td><td>${u.username}</td><td>${u.role}</td><td>CHF ${u.balance.toFixed(2)}</td>`;
+          tbody.appendChild(tr);
+        });
+        if (data.users_returned > 1) {
+          resultEl.className = 'result res-danger';
+          resultEl.textContent = `⚠ ANGRIFF ERFOLGREICH — ${data.users_returned} Datensätze geleakt!`;
+        } else {
+          resultEl.className = 'result res-success';
+          resultEl.textContent = `✓ Login OK — Willkommen, ${data.data[0].username}`;
+        }
+      } else {
+        resultEl.className = 'result res-neutral';
+        resultEl.textContent = data.error ? `SQL-Fehler: ${data.error}` : '✗ Login fehlgeschlagen';
+      }
+    } else {
+      if (data.success) {
+        resultEl.className = 'result res-success';
+        resultEl.textContent = `✓ Login OK — Willkommen, ${data.data[0].username}`;
+      } else {
+        const isAttack = /OR|--|UNION/i.test(username);
+        resultEl.className = isAttack ? 'result res-blocked' : 'result res-neutral';
+        resultEl.textContent = isAttack
+          ? '🛡 Angriff abgewehrt — Payload als Literal behandelt, kein Treffer'
+          : '✗ Login fehlgeschlagen — ungültige Zugangsdaten';
+      }
+    }
+  }
+
+  previewVuln();
+  previewSafe();
+</script>
+</body>
+</html>
