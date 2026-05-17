@@ -1,12 +1,20 @@
 from flask import Flask, request, jsonify, render_template
 import sqlite3
+import logging
 
 app = Flask(__name__)
 DB = "bank.db"
 
-# ============================================================
-# VERWUNDBAR — String-Konkatenation (NIEMALS so in Produktion!)
-# ============================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S"
+)
+
+log = logging.getLogger(__name__)
+
+
+# vulnerable — string concatenation
 @app.route("/login/vulnerable", methods=["POST"])
 def login_vulnerable():
     username = request.json.get("username", "")
@@ -39,9 +47,7 @@ def login_vulnerable():
     return jsonify({"success": False, "query": query, "users_returned": 0})
 
 
-# ============================================================
-# GESICHERT — Prepared Statement / Parameterized Query
-# ============================================================
+# safe — prepared statement / parameterized query
 @app.route("/login/secure", methods=["POST"])
 def login_secure():
     username = request.json.get("username", "")
